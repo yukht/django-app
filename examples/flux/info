@@ -1,0 +1,17 @@
+- Install flux
+curl -s https://fluxcd.io/install.sh | sudo bash
+
+- Generate github personal token and
+
+export GITHUB_TOKEN=token
+export GITHUB_USER=name
+
+flux bootstrap github \
+     --owner=$GITHUB_USER \
+     --repository=flux-nginx \
+     --branch=main \
+     --path=./clusters/yandex \
+     --personal
+
+# Port-forwarding
+kubectl port-forward --address 0.0.0.0 -n nginx-flux service/gitops2-service 8580:80

@@ -1,0 +1,43 @@
+a)
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+or
+
+b)
+wget https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl create namespace argocd
+kubectl apply -n argocd -f ./install.yaml
+
+# Your admin password #
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Go to GUI
+kubectl port-forward svc/argocd-server -n argocd --address 0.0.0.0 8443:443
+kubectl port-forward svc/gitops1-service -n gitops --address 0.0.0.0 8480:80
+
+
+#### ARGO CD add repo ####
+
+## Connect to pod ##
+kubectl exec -it argocd-server-POD_ID -- /bin/bash
+
+## Login to Argo CD ##
+argocd login localhost:8080
+
+## Save your github private key in pod ##
+
+echo "-----BEGIN OPENSSH PRIVATE KEY-----
+.........
+.........
+-----END OPENSSH PRIVATE KEY-----" >> ./id_rsa
+
+argocd repo add git@github.com:yukht/argocd-nginx.git --insecure-ignore-host-key --ssh-private-key-path id_rsa
+
+# If repos unable to delete, try to delete secret
+kubectl delete secret
+
+# After execute this operations you can use GUI to create app or/and your project #
+# I have a trouble when i try to connect to github via GUI #
+
+
