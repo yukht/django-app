@@ -1,0 +1,173 @@
+---
+# stages:
+#     - deploy
+#     - test
+#     # - destroy
+# variables:
+#     HOST_REPO_PATH: "/opt/gitlab-helm-ci-nginx"
+#     GL_REPO_PATH: "https://gitlab.com/yukht/ci-nginx" 
+stages:
+    - build
+    - test
+variables:
+    DOCKER_BUILD_PATH: "build"
+    DOCKER_REG_HOST: "https://k8s-automate:5000"
+    IMAGE_APP_HOST: "k8s-automate:5000"
+    IMAGE_APP_APP_NAME: "django-app"
+# Test Zone path for check containers on ci/cd server
+    APP_TZ_CONF_VARS: "localhost,51.250.2.221"
+    DOCKER_TZ_PATH: "testzone"
+    DOCKER_TZ_TEST_URL: "http://51.250.2.221:3003"
+# before_script:
+#     - sudo docker login -u dev/$DOCKER_REG_USERNAME -p dev/$DOCKER_REG_PASSWORD dev/$DOCKER_REG_HOST 
+
+build_app:
+    tags:
+        - dev
+    stage: build
+    environment:                        # registry user and password from variables scope "dev"
+        name: dev
+    script:
+        - sudo docker login -u $DOCKER_REG_USERNAME -p $DOCKER_REG_PASSWORD $DOCKER_REG_HOST
+        - cd $CI_PROJECT_DIR/$DOCKER_BUILD_PATH
+        - sudo docker build -t ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA .
+        - sudo docker tag ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
+        # - sudo cp -rf $CI_PROJECT_DIR/index.html $HOST_REPO_PATH/build/
+    inherit:
+        variables:
+            - DOCKER_BUILD_PATH
+            - DOCKER_REG_HOST
+            - IMAGE_APP_HOST
+            - IMAGE_APP_APP_NAME
+# если возникли ошибки на соедующих этапах после build то образ надо пересоздать
+    # when: manual
+    when: always
+
+local_test_app:
+    tags:
+        - dev
+    stage: test
+    script:
+        - cd $CI_PROJECT_DIR/$DOCKER_TZ_PATH
+        - sudo mkdir django-app test-db-volume
+        - 'sudo echo CHECK TESTZONE URL ${DOCKER_TZ_TEST_URL}'
+        - sudo APP_TZ_CONF_VARS=${APP_TZ_CONF_VARS} IMAGE_APP_HOST=${IMAGE_APP_HOST} IMAGE_APP_APP_NAME=${IMAGE_APP_APP_NAME} CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA} docker-compose up -d
+        - sleep 10
+        - curl_resp=`curl -I ${DOCKER_TZ_TEST_URL} -o /dev/null -w '%{http_code}' -s`;
+            if [ "$curl_resp" != 200 ]; then exit 1; fi;
+        - sleep 20
+        - sudo docker-compose down
+        - sudo rm -fr django-app test-db-volume
+        - sudo docker rmi ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
+
+        # another way - use testzone directory on /opt/tz etc
+        # - sudo cp -rf $CI_PROJECT_DIR/index.html $HOST_REPO_PATH/build/
+    inherit:
+        variables:
+            # Allow tz host (ci/cd server) in app config
+            - APP_TZ_CONF_VARS
+            - IMAGE_APP_HOST
+            - IMAGE_APP_APP_NAME
+            - DOCKER_TZ_PATH
+            - DOCKER_TZ_TEST_URL
+    needs:
+        - build_app
+    # when: manual 
+
+
+
+# stages:
+#     - deploy
+#     - test
+#     # - destroy
+# variables:
+#     HOST_REPO_PATH: "/opt/gitlab-helm-ci-nginx"
+#     GL_REPO_PATH: "https://gitlab.com/yukht/ci-nginx"
+
+# check gitlab:
+#     tags:
+#         - dev
+#     stage: deploy
+#     script:
+#         - ([ -d $HOST_REPO_PATH ]) || (sudo mkdir $HOST_REPO_PATH)
+#         - (if [ -d $HOST_REPO_PATH ]; then
+#             cd $HOST_REPO_PATH && sudo git pull origin main; else
+#             sudo git clone $GL_REPO_PATH $HOST_REPO_PATH; fi)
+#         # - sudo cp -rf $CI_PROJECT_DIR/index.html $HOST_REPO_PATH/build/
+#     inherit:
+#         variables:
+#           - HOST_REPO_PATH
+#           - GL_REPO_PATH
+#     only:
+#         changes:
+#             - values.yaml
+
+# deploy:
+#     tags:
+#         - dev
+#     stage: deploy
+#     script:
+#         - cd $HOST_REPO_PATH &&
+#           sudo helm upgrade --install -n ci-nginx --create-namespace --values values.yaml ci-nginx .
+#     dependencies:
+#         - check gitlab
+#     inherit:
+#         variables:
+#           - HOST_REPO_PATH
+#     only:
+#         changes:
+#             - values.yaml
+
+# run tests:
+#     tags:
+#         - dev
+#     stage: test
+#     script:
+#         - sudo kubectl port-forward --address 0.0.0.0 -n ci-nginx service/ci-nginx-service 8080:9280 &
+#             # WARN: hardcoded ports
+#         - sleep 120 && sudo killall kubectl
+#     only:
+#         changes:
+#             - values.yaml
+
+
+
+###
+###
+###
+
+
+# run tests:
+#     tags:
+#         - dev
+#     stage: test
+#     script:
+#         - curl_resp=`curl -I http://10.128.1.10:9889 -o /dev/null -w '%{http_code}' -s`;
+#             if [ "$curl_resp" != 200 ]; then exit 1; fi;            
+#             # exit 0 is disabled because we want to run next step
+#         - md5_web=`wget -q -O- http://10.128.1.10:9889 | md5sum | cut -f1 -d ' '`;
+#             md5_local=`md5sum $CI_PROJECT_DIR/index.html | cut -f1 -d ' '`;
+#             if [ "$md5_web" == "$md5_local" ];
+#             then exit 0; else
+#             echo "Files on CI server and gitgub don't match" && exit 1; fi;
+#     only:
+#         changes:
+#             - index.html
+
+# remove container:
+#     tags:
+#         - dev
+#     stage: destroy
+#     script:
+#         - cd $HOST_REPO_PATH && sudo docker-compose stop && sudo docker-compose rm -f &&
+#             sudo docker volume rm -f `sudo docker volume ls -q` && sudo docker image prune -f
+#     inherit:
+#         variables:
+#           - HOST_REPO_PATH
+#     only:
+#         changes:
+#             - index.html
+
+    # when: manual
+
+

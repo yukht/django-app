@@ -1,0 +1,3 @@
+# Ignore testzone directories (and delete it when test job is done)
+**/django-app
+**/test-db-volume

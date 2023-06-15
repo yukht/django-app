@@ -1,0 +1,53 @@
+version: "3"
+
+services:
+  django-app:
+    hostname: django-app
+    image: ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:${CI_COMMIT_SHORT_SHA}
+    ports:
+      - "3003:3003"
+    volumes:
+      - django-app:/app
+    command: >
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:3003"
+    environment:
+      - DB_HOST=test-db
+      - DB_NAME=tutorial-dev
+      - DB_USER=vinhle
+      - DB_PASS=password
+#      - APP_ALLOWED_HOSTS=localhost,51.250.2.221
+      - APP_ALLOWED_HOSTS=${APP_TZ_CONF_VARS}
+    depends_on:
+      test-db:
+        condition: service_healthy
+#        condition: service_completed_successfully
+  test-db:
+    hostname: test-db
+    image: postgres:13-alpine
+    environment:
+      - POSTGRES_DB=tutorial-dev
+      - POSTGRES_USER=vinhle
+      - POSTGRES_PASSWORD=password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    volumes:
+    - test-db-volume:/var/lib/postgresql/data
+
+volumes:
+  django-app:
+    driver: local
+    driver_opts:
+      type: 'volume'
+      o: 'bind'
+      device: './django-app'
+  test-db-volume:
+    driver: local
+    driver_opts:
+      type: 'volume'
+      o: 'bind'
+      device: './test-db-volume'
