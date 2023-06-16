@@ -1,19 +1,15 @@
 ---
-# stages:
-#     - deploy
-#     - test
-#     # - destroy
-# variables:
-#     HOST_REPO_PATH: "/opt/gitlab-helm-ci-nginx"
-#     GL_REPO_PATH: "https://gitlab.com/yukht/ci-nginx" 
 stages:
     - build
     - test
+    - deploy
+    # - debug
 variables:
     DOCKER_BUILD_PATH: "build"
     DOCKER_REG_HOST: "https://k8s-automate:5000"
     IMAGE_APP_HOST: "k8s-automate:5000"
-    IMAGE_APP_APP_NAME: "django-app"
+    # Also ${APP_APP_NAME} used in docker-compose!
+    APP_APP_NAME: "django-app"
 # Test Zone path for check containers on ci/cd server
     APP_TZ_CONF_VARS: "localhost,51.250.2.221"
     DOCKER_TZ_PATH: "testzone"
@@ -21,7 +17,7 @@ variables:
 # before_script:
 #     - sudo docker login -u dev/$DOCKER_REG_USERNAME -p dev/$DOCKER_REG_PASSWORD dev/$DOCKER_REG_HOST 
 
-build_app:
+build:
     tags:
         - dev
     stage: build
@@ -30,20 +26,20 @@ build_app:
     script:
         - sudo docker login -u $DOCKER_REG_USERNAME -p $DOCKER_REG_PASSWORD $DOCKER_REG_HOST
         - cd $CI_PROJECT_DIR/$DOCKER_BUILD_PATH
-        - sudo docker build -t ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA .
-        - sudo docker tag ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
+        - sudo docker build -t ${IMAGE_APP_HOST}/${APP_APP_NAME}:$CI_COMMIT_SHORT_SHA .
+        - sudo docker tag ${IMAGE_APP_HOST}/${APP_APP_NAME}:$CI_COMMIT_SHORT_SHA ${IMAGE_APP_HOST}/${APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
         # - sudo cp -rf $CI_PROJECT_DIR/index.html $HOST_REPO_PATH/build/
     inherit:
         variables:
             - DOCKER_BUILD_PATH
             - DOCKER_REG_HOST
             - IMAGE_APP_HOST
-            - IMAGE_APP_APP_NAME
+            - APP_APP_NAME
 # если возникли ошибки на соедующих этапах после build то образ надо пересоздать
     # when: manual
     when: always
 
-local_test_app:
+test:
     tags:
         - dev
     stage: test
@@ -51,30 +47,58 @@ local_test_app:
         - cd $CI_PROJECT_DIR/$DOCKER_TZ_PATH
         - sudo mkdir django-app test-db-volume
         - 'sudo echo CHECK TESTZONE URL ${DOCKER_TZ_TEST_URL}'
-        - sudo APP_TZ_CONF_VARS=${APP_TZ_CONF_VARS} IMAGE_APP_HOST=${IMAGE_APP_HOST} IMAGE_APP_APP_NAME=${IMAGE_APP_APP_NAME} CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA} docker-compose up -d
+        - sudo APP_TZ_CONF_VARS=${APP_TZ_CONF_VARS} IMAGE_APP_HOST=${IMAGE_APP_HOST} APP_APP_NAME=${APP_APP_NAME} CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA} docker-compose up -d
         - sleep 10
         - curl_resp=`curl -I ${DOCKER_TZ_TEST_URL} -o /dev/null -w '%{http_code}' -s`;
             if [ "$curl_resp" != 200 ]; then exit 1; fi;
         - sleep 20
         - sudo docker-compose down
         - sudo rm -fr django-app test-db-volume
-        - sudo docker rmi ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
-
+        # - sudo docker rmi ${IMAGE_APP_HOST}/${APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
         # another way - use testzone directory on /opt/tz etc
-        # - sudo cp -rf $CI_PROJECT_DIR/index.html $HOST_REPO_PATH/build/
     inherit:
         variables:
             # Allow tz host (ci/cd server) in app config
             - APP_TZ_CONF_VARS
             - IMAGE_APP_HOST
-            - IMAGE_APP_APP_NAME
+            - APP_APP_NAME
             - DOCKER_TZ_PATH
             - DOCKER_TZ_TEST_URL
     needs:
-        - build_app
+        - build
     # when: manual 
 
+deploy:
+    tags:
+        - dev
+    stage: deploy
+    script:
+        - sudo docker push ${IMAGE_APP_HOST}/${APP_APP_NAME}:$CI_COMMIT_SHORT_SHA
+        - sudo cat django-app-full.yaml | envsubst > tmp-django-app-full.yaml
+        - sudo kubectl apply -f tmp-django-app-full.yaml
+        # - rm -f tmp-django-app-full.yaml
+    inherit:
+        variables:
+            # Allow prod host (k8s-worker or lb-server) in k8s config
+            - IMAGE_APP_HOST
+            - APP_APP_NAME
+    needs:
+        - test
+# CHANGE ENV VALUE APP_ALLOWED_HOSTS!!! 
 
+# debug:
+#     tags:
+#         - dev
+#     stage: debug
+#     script:
+#         - cat django-app-full.yaml | envsubst
+#         # - kubectl apply -f django-app-full.yaml
+#     inherit:
+#         variables:
+#             # Allow prod host (k8s-worker or lb-server) in k8s config
+#             - IMAGE_APP_HOST
+#             - APP_APP_NAME
+#     when: always
 
 # stages:
 #     - deploy

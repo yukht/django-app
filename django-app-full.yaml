@@ -1,0 +1,258 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: django-local-pv
+  namespace: django                                   # todo
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/vol1/django-db
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-worker1
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+# about name:
+#{{ .Release.Name }}=django+version or django;$version_label
+  name: django-db
+  namespace: django                                   # todo
+  labels:
+    app: django-db
+spec:
+  selector:
+    matchLabels:
+      app: django-db
+  minReadySeconds: 20                                 # todo
+  template:
+    metadata:
+      labels:
+        app: django-db
+    spec:
+      terminationGracePeriodSeconds: 20               # todo
+      containers:
+        - name: django-db
+          image: postgres:13-alpine
+          volumeMounts:
+            - name: django-local-pv
+              mountPath: /var/lib/postgresql/data
+          ports:
+            - containerPort: 5432
+              name: django-db-port
+          env:
+            - name: POSTGRES_DB
+              value: "tutorial-dev"
+            - name: POSTGRES_USER
+              value: "vinhle"
+            - name: POSTGRES_PASSWORD
+              value: "password"
+  volumeClaimTemplates:                               # auto create PVC
+  - metadata:
+      name: django-local-pv
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-storage
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+# about name:
+#{{ .Release.Name }}=django+version or django;$version_label
+  name: $APP_APP_NAME
+  namespace: django                                   # todo
+  labels:
+    app: $APP_APP_NAME
+spec:
+  selector:
+    matchLabels:
+      app: $APP_APP_NAME
+  replicas: 2
+  minReadySeconds: 20                                 # todo
+  template:
+    metadata:
+      labels:
+        app: $APP_APP_NAME
+    spec:
+      terminationGracePeriodSeconds: 10               # todo
+      containers:
+      - name: $APP_APP_NAME-container
+        image: $IMAGE_APP_HOST/$APP_APP_NAME:$CI_COMMIT_SHORT_SHA
+        command: ["/bin/sh"]
+        args: ["-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:3003"]       # todo
+        ports:
+          - containerPort: 3003                                                                   # todo
+            name: $APP_APP_NAME-port
+        env:                                                                                      # todo
+          - name: "APP_ALLOWED_HOSTS"
+            value: "51.250.10.6,51.250.2.221"
+          - name: DB_HOST
+            value: "django-db-in"
+          - name: DB_NAME
+            value: "tutorial-dev"
+          - name: DB_USER
+            value: "vinhle"
+          - name: DB_PASS
+            value: "password"
+      imagePullSecrets:
+      - name: regcred
+
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: $APP_APP_NAME                                                                         # todo
+#   namespace: django
+#   labels:
+#     app: $APP_APP_NAME                                                                        # todo
+# spec:
+#   replicas: 1
+#   containers:
+#   - name: $APP_APP_NAME-container
+#     image: $IMAGE_APP_HOST/$APP_APP_NAME:$CI_COMMIT_SHORT_SHA
+#     command: ["/bin/sh"]
+#     args: ["-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:3003"]       # todo
+#     ports:
+#       - containerPort: 3003                                                                   # todo
+#         name: $APP_APP_NAME-port
+#     env:                                                                                      # todo
+#       - name: "APP_ALLOWED_HOSTS"
+#         value: "51.250.10.6,51.250.2.221"
+#       - name: DB_HOST
+#         value: "django-db-in"
+#       - name: DB_NAME
+#         value: "tutorial-dev"
+#       - name: DB_USER
+#         value: "vinhle"
+#       - name: DB_PASS
+#         value: "password"
+#   imagePullSecrets:
+#   - name: regcred
+
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: test-private-reg
+#   namespace: django
+# spec:
+#   containers:
+#   - name: test-private-reg-container
+#     image: k8s-automate:5000/test_nginx:0.1
+#   imagePullSecrets:
+#   - name: regcred
+
+# Service for DB
+---
+kind: Service
+apiVersion: v1
+metadata:
+ name: django-db-in
+ namespace: django                                   # todo
+spec:
+ selector:
+   app: django-db
+ ports:
+ - protocol: TCP
+   port: 5432
+   targetPort: django-db-port
+
+#Service for application (django-app)
+---
+kind: Service
+apiVersion: v1
+metadata:
+ name: $APP_APP_NAME-in
+ namespace: django                                     # todo
+spec:
+ type: NodePort
+ selector:
+   app: $APP_APP_NAME
+ ports:
+ - protocol: TCP
+   nodePort: 30001                                     # todo
+   port: 3003                                          # todo
+   targetPort: $APP_APP_NAME-port
+
+# Service for application (django-app)
+# ---
+# kind: Service
+# apiVersion: v1
+# metadata:
+#  name: django-db-in
+#  namespace: django                                     # todo
+# spec:
+#  type: NodePort
+#  selector:
+#    app: django-db
+#  ports:
+#  - protocol: TCP
+#    nodePort: 30001                                     # todo
+#    port: 5432                                          # todo
+#    targetPort: django-db-port
+
+
+# ---
+# kind: Service
+# apiVersion: v1
+# metadata:
+#  name: django-db-in
+#  namespace: django                                   # todo
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: django-db
+#   ports:
+#   - protocol: TCP
+#     nodePort: 30001
+#     port: 5432
+#     targetPort: django-db-port
+
+#kind: Service
+#apiVersion: v1
+#metadata:
+#  name: django-db-in
+#  namespace: django                                   # todo
+#spec:
+#  type: NodePort
+#  selector:
+#    app: django-db
+#  ports:
+#  - protocol: TCP
+#    nodePort: 30001
+#    port: 5432
+#    targetPort: django-db-port
+# Service available from this and other nodes
+
+#kind: Service
+#apiVersion: v1
+#metadata:
+#  name: django-db-in
+#  namespace: django                                   # todo
+#spec:
+#  selector:
+#    app: web1-pod
+#  ports:
+#  - protocol: TCP
+#    port: 5432
+#    targetPort: django-db-port
+
+
+#        command: ['sh', '-c', 'echo Hello Kubernetes from the Deployment! && sleep 3600']
+
+

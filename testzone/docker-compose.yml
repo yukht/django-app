@@ -3,7 +3,7 @@ version: "3"
 services:
   django-app:
     hostname: django-app
-    image: ${IMAGE_APP_HOST}/${IMAGE_APP_APP_NAME}:${CI_COMMIT_SHORT_SHA}
+    image: ${IMAGE_APP_HOST}/${APP_APP_NAME}:${CI_COMMIT_SHORT_SHA}
     ports:
       - "3003:3003"
     volumes:
