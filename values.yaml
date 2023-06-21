@@ -1,0 +1,117 @@
+# Default values for django-app.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+namespace: "django"
+releaseLabel: "0.1.1"
+# Used by two microservices
+dbName: "tutorial-dev"
+
+app:
+  replicaCount: 1
+  allowedHosts: "51.250.10.6,51.250.2.221"
+  # Wait for application starts webserver
+  waitProgressingSec: 20
+  image:
+    # Set app image url via CI e.g. "k8s-automate:5000/django-app:1b41a97c"
+    # Variable regURL is overriden by default in app manifest if CI isn't being used and regURL isn't being set manually
+    regURL: ""
+    # Variable defaultURL is used to prevent errors. Install the stable version of the application here,
+    # which is always available from your registry
+    defaultURL: "k8s-automate:5000/django-app:latest"
+    pullPolicy: IfNotPresent
+  log:
+    logServerHost: "k8s-automate"
+    logServerPort: 514
+    logMountPath: "/var/log/django-app"                       # Path of emptyDir volume for logging
+    logAppFilename: "/var/log/django-app/app.log"             # Local file to which the application will send logs
+    sleepSec: 3                                               # Pause before binlogger check log state and send logs
+  service:
+    servicePort: 3003
+    nodePort: 30001
+db:
+  image:
+    repository: postgres
+    tag: "13-alpine"
+    pullPolicy: IfNotPresent
+  waitProgressingSec: 20
+  waitTerminationSec: 10
+# Service port is static
+
+# web:
+#   image:
+#     repository: nginx
+#     pullPolicy: IfNotPresent
+#     # Overrides the image tag whose default is the chart appVersion.
+#     tag: ""
+
+#   imagePullSecrets: []
+#   nameOverride: ""
+#   fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# podAnnotations: {}
+
+# podSecurityContext: {}
+#   # fsGroup: 2000
+
+# securityContext: {}
+#   # capabilities:
+#   #   drop:
+#   #   - ALL
+#   # readOnlyRootFilesystem: true
+#   # runAsNonRoot: true
+#   # runAsUser: 1000
+
+# service:
+#   type: ClusterIP
+#   port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+# resources: {}
+#   # We usually recommend not to specify default resources and to leave this as a conscious
+#   # choice for the user. This also increases chances charts run on environments with little
+#   # resources, such as Minikube. If you do want to specify resources, uncomment the following
+#   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+#   # limits:
+#   #   cpu: 100m
+#   #   memory: 128Mi
+#   # requests:
+#   #   cpu: 100m
+#   #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# nodeSelector: {}
+
+# tolerations: []
+
+# affinity: {}

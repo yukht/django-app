@@ -1,0 +1,41 @@
+version: '3.2'
+services:
+    alertmanager-bot:
+        command:
+        - --alertmanager.url=http://k8s-automate:9093
+        - --log.level=info
+#        - --log.level=debug                         # In debug mode you will be able to see the messages received by the alert bot
+        - --store=bolt
+        - --bolt.path=/data/bot.db
+        environment:
+          TELEGRAM_ADMIN: "999999999"                # Ask the bot what's your Telegram account ID, for example @my_id_bot
+          TELEGRAM_TOKEN: CLEANTEXTSUPERSECRETTOKEN  # I'm created alerting bot use @BotFather
+        image: metalmatze/alertmanager-bot:0.4.3
+        ports:
+        - 8180:8080                                  # Port 8080 used by GitLab Puma addon on my CI/CD server
+        restart: always
+        volumes:
+        - ./bot_data:/data
+
+    blackbox-exporter:
+        image: prom/blackbox-exporter
+        ports:
+            - 9115:9115
+        restart: always
+        volumes:
+            - ./blackbox_conf:/config
+        command: --config.file=/config/blackbox.yml
+
+volumes:
+  bot_data:
+    driver: local
+    driver_opts:
+      type: 'volume'
+      o: 'bind'
+      device: './bot_data'
+  blackbox_conf:
+    driver: local
+    driver_opts:
+      type: 'volume'
+      o: 'bind'
+      device: './blackbox_conf'

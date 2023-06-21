@@ -1,0 +1,33 @@
+# Service for DB
+---
+kind: Service
+apiVersion: v1
+metadata:
+ name: django-db-in
+ namespace: {{ .Values.namespace }}
+spec:
+ selector:
+    app: {{ .Release.Name }}-db
+ ports:
+ - protocol: TCP
+  # Default port used by the django ms
+  # To change this value, you also need to change ms DB_HOST environment variable (e.g. DB_HOST=django-db-in:15432)
+   port: 5432
+   targetPort: db-port
+
+#Service for application (django-app)
+---
+kind: Service
+apiVersion: v1
+metadata:
+ name: django-app-in
+ namespace: {{ .Values.namespace }}
+spec:
+ type: NodePort
+ selector:
+   app: {{ .Release.Name }}-app
+ ports:
+ - protocol: TCP
+   nodePort: {{ .Values.app.service.nodePort }}
+   port: {{ .Values.app.service.servicePort }}
+   targetPort: app-port

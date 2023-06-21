@@ -1,0 +1,14 @@
+---
+global: {}
+templates: []
+route:
+    receiver: 'alertmanager-bot'
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 3h
+receivers:
+- name: 'alertmanager-bot'
+  webhook_configs:
+  - send_resolved: true
+    url: 'http://k8s-automate:8180'
+

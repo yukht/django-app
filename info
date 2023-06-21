@@ -1,0 +1,15 @@
+helm install --create-namespace --namespace django django-app .
+
+helm upgrade --install --create-namespace --namespace django django-app .
+
+# helm uninstall -n django django-app
+
+# Update values
+helm upgrade --install --namespace django --values values.yaml django-app .
+
+# Rollback to revision (revision 9 as example + increase current revision 10 to 11)
+helm rollback --namespace django django-app 9
+
+# Port-forwarding (or create lb)
+kubectl port-forward --address 0.0.0.0 -n django service/django-app-in 8180:3003
+

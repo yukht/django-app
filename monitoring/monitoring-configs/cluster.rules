@@ -1,0 +1,10 @@
+groups:
+- name: Cluster
+  rules:
+  - record: pod_container_status_waiting
+    expr: kube_pod_container_status_waiting
+  - alert: PodError
+    expr: kube_pod_container_status_waiting > 0
+    for: 1m
+    annotations:
+      description: "Error on instance {{ $labels.instance }} namespace={{ $labels.namespace }} pod {{ $labels.pod }}"

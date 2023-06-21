@@ -1,0 +1,59 @@
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: {{ .Release.Name }}-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}-db
+    release: {{ .Values.releaseLabel }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-db
+  minReadySeconds: {{ .Values.db.waitProgressingSec }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-db
+        release: {{ .Values.releaseLabel }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.db.waitTerminationSec }}
+      containers:
+        - name: {{ .Release.Name }}-db-container
+          image: {{ .Values.db.image.repository }}:{{ .Values.db.image.tag }}
+          imagePullPolicy: {{ .Values.db.image.pullPolicy }}
+          volumeMounts:
+            - name: db-local-pv
+              mountPath: /var/lib/postgresql/data
+          ports:
+          # Default port used by the django ms
+          # To change this value, you also need to change ms DB_HOST environment variable (e.g. DB_HOST=django-db-in:15432)
+            - containerPort: 5432
+              name: db-port
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.dbName }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_USER
+              # value: "vinhle"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_PASS
+              # value: "password"
+  volumeClaimTemplates:                                               # auto create PVC
+  - metadata:
+      name: db-local-pv
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-storage
+      resources:
+        requests:
+          storage: 5Gi
+

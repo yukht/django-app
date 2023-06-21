@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netutils
+  namespace: kube-system
+spec:
+  containers:
+  - name: dnsutils
+    image: ghcr.io/nicolaka/netshoot:v0.11
+    command:
+      - sleep
+      - "infinity"
+    imagePullPolicy: IfNotPresent
+  restartPolicy: Always

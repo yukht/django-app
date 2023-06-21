@@ -1,0 +1,86 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Release.Name }}-app
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}-app
+    release: {{ .Values.releaseLabel }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  replicas: {{ .Values.app.replicaCount }}
+  minReadySeconds: {{ .Values.app.waitProgressingSec }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-app
+        release: {{ .Values.releaseLabel }}
+    spec:
+      containers:
+      - name: {{ .Release.Name }}-app-container
+        image: {{ .Values.app.image.regURL }}
+        # Usually "regURL" is set when executing CI/CD jobs, also you can try helm install ... --set regURL=IMAGE ...
+        image: "{{ .Values.app.image.regURL | default .Values.app.image.defaultURL }}"
+        imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+        # command: ["/bin/sh"]
+        # args: ["-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:{{ .Values.app.service.servicePort }}"]
+        command: ["/bin/sh", "-c"]
+        args:
+          - "python manage.py migrate && python manage.py runserver 0.0.0.0:{{ .Values.app.service.servicePort }}\
+            &> {{ .Values.app.log.logAppFilename }}"
+        volumeMounts:
+        - name: varlog
+          mountPath: {{ .Values.app.log.logMountPath }}
+        ports:
+          - containerPort: {{ .Values.app.service.servicePort }}
+            name: app-port
+        env:
+          - name: "APP_ALLOWED_HOSTS"
+            value: {{ .Values.app.allowedHosts }}
+          - name: DB_HOST                                     # service name (In this work is a static expression)
+            value: "django-db-in"
+          - name: DB_NAME
+            value: {{ .Values.dbName }}
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: app-secrets
+                key: DB_USER
+            # value: "vinhle"
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app-secrets
+                key: DB_PASS
+            # value: "password"
+      - name: binlogger
+        image: dockerpinata/util-linux:2.1
+        # args: [/bin/sh, -c, 'tail -f {{ .Values.app.log.logAppFilename }}']
+        args:
+        - /bin/sh
+        - -c
+        - |
+          while true;
+          do
+            while sleep 2; do
+              md1=$(md5sum /var/log/django-app/app.log | cut -d " " -f1)
+              sleep {{ .Values.app.log.sleepSec }}
+              md2=$(md5sum /var/log/django-app/app.log | cut -d " " -f1)
+              if [ "$md1" != "$md2" ]; then
+              tail -n 1 {{ .Values.app.log.logAppFilename }} \
+                | logger -s -n {{ .Values.app.log.logServerHost }} -P {{ .Values.app.log.logServerPort }};
+              fi;
+            done;
+          done
+        volumeMounts:
+        - name: varlog
+          mountPath: {{ .Values.app.log.logMountPath }}
+      # This secret is created manually. See README.md for try example
+      imagePullSecrets:
+      - name: regcred
+      volumes:
+        - name: varlog
+          emptyDir: {}
